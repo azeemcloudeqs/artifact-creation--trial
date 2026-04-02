@@ -46,10 +46,11 @@ headers = {
     "Authorization": f"Bearer {access_token}",
     "environmentName": ENVIRONMENT_NAME,
     "branch": BRANCH,
-    "versionName": version_name
+    "versionName": version_name,
+    "Content-Type": "application/json"
 }
 
-# 🚨 IMPORTANT: NO BODY, NO JSON, NO FILES
+# JSON body (IMPORTANT)
 response = requests.post(
     artifact_url,
     headers=headers
@@ -71,4 +72,4 @@ try:
 except:
     print("ℹ️ No JSON response body")
 
-print("✅ Artifact Created Successfully:", version_name)
+print(" Artifact Created Successfully:", version_name)
