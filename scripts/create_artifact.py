@@ -2,7 +2,6 @@ import os
 import requests
 
 # ===== CONFIG (FROM GITHUB SECRETS) =====
-# Secret names must match exactly what you set in GitHub → Settings → Secrets
 CLIENT_ID     = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 PROJECT_ID    = os.getenv("PROJECT_ID")
@@ -57,18 +56,17 @@ access_token = token_res.json().get("access_token")
 print("✅ Token generated")
 
 # ===== STEP 2: CREATE ARTIFACT =====
-# Matillion DPC snapshots the branch that is already synced inside its
-# Git-backed project. No body or file upload is needed — just pass
-# versionName, environmentName, and branch as HEADERS.
-# DO NOT set Content-Type: application/json — the API returns 415 if you do.
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
+# Content-Type is set manually (not via json=) so we control the body separately.
+# The API requires the header to be present but does not accept a body payload —
+# so we send Content-Type: application/json with an empty byte string as the body.
 headers = {
     "Authorization":   f"Bearer {access_token}",
+    "Content-Type":    "application/json",
     "environmentName": ENVIRONMENT_NAME,
     "branch":          BRANCH,
     "versionName":     version_name,
-    # ❌ No Content-Type header — sending one causes 415 Unsupported Media Type
 }
 
 print(f"\n🚀 Creating artifact '{version_name}' ...")
@@ -76,7 +74,7 @@ print(f"\n🚀 Creating artifact '{version_name}' ...")
 response = requests.post(
     artifact_url,
     headers=headers,
-    # ❌ No json= or data= body — the API does not accept a body
+    data=b"",        # empty body — avoids requests auto-setting any Content-Type
     timeout=60,
 )
 
