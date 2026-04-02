@@ -3,7 +3,7 @@ version: "1.0"
 pipeline:
   components:
     SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG:
-      type: "table-input"
+      type: "table-input-1"
       parameters:
         componentName: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
         database: "TEST_AZEEM"

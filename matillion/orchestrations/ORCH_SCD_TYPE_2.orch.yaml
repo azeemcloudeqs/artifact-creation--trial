@@ -17,7 +17,7 @@ pipeline:
         failure:
         - "End Failure"
       parameters:
-        componentName: "SQL Script"
+        componentName: "SQL Script 11"
         scriptLocation: "Component"
         declareSqlVariables: "Include selected"
         variablesToInclude:

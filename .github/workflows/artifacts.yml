@@ -1,0 +1,52 @@
+name: Matillion Artifact Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'matillion/**'
+
+jobs:
+  create-artifact:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Extract Metadata
+      - name: Extract Metadata
+        run: |
+          echo "GITHUB_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
+          echo "USERNAME=${GITHUB_ACTOR}" >> $GITHUB_ENV
+          echo "USER_EMAIL=$(git log -1 --pretty=format:'%ae')" >> $GITHUB_ENV
+
+      # 3. Print Debug Info (VERY USEFUL)
+      - name: Print Metadata
+        run: |
+          echo "Commit ID: $GITHUB_SHA"
+          echo "User: $USERNAME"
+          echo "Email: $USER_EMAIL"
+
+      # 4. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 5. Install Dependencies
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      # 6. Run Python Script
+      - name: Create Matillion Artifact
+        env:
+          GITHUB_SHA: ${{ env.GITHUB_SHA }}
+          USERNAME: ${{ env.USERNAME }}
+          USER_EMAIL: ${{ env.USER_EMAIL }}
+
+        run: python scripts/create_artifact.py
