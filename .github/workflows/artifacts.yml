@@ -1,7 +1,7 @@
 name: Matillion Artifact Pipeline
 
 on:
-  push:
+  pull_request:
     branches:
       - dev
     paths:
@@ -12,23 +12,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
+      # 1. Checkout with full history so git log works
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # 2. Extract Metadata
       - name: Extract Metadata
+        id: meta
         run: |
-          echo "GITHUB_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
-          echo "USERNAME=${GITHUB_ACTOR}" >> $GITHUB_ENV
-          echo "USER_EMAIL=$(git log -1 --pretty=format:'%ae')" >> $GITHUB_ENV
+          echo "COMMIT_ID=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+          echo "USERNAME=${{ github.actor }}"                         >> $GITHUB_ENV
+          echo "USER_EMAIL=$(git log -1 --pretty=format:'%ae' ${{ github.event.pull_request.head.sha }})" >> $GITHUB_ENV
+          echo "PR_NUMBER=${{ github.event.pull_request.number }}"    >> $GITHUB_ENV
 
-      # 3. Print Debug Info (VERY USEFUL)
+      # 3. Print Debug Info
       - name: Print Metadata
         run: |
-          echo "Commit ID: $GITHUB_SHA"
-          echo "User: $USERNAME"
-          echo "Email: $USER_EMAIL"
+          echo "==================================="
+          echo "  Commit ID : $COMMIT_ID"
+          echo "  User      : $USERNAME"
+          echo "  Email     : $USER_EMAIL"
+          echo "  PR Number : $PR_NUMBER"
+          echo "==================================="
 
       # 4. Setup Python
       - name: Setup Python
@@ -45,8 +52,11 @@ jobs:
       # 6. Run Python Script
       - name: Create Matillion Artifact
         env:
-          GITHUB_SHA: ${{ env.GITHUB_SHA }}
-          USERNAME: ${{ env.USERNAME }}
-          USER_EMAIL: ${{ env.USER_EMAIL }}
-
+          CLIENT_ID:               ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET:           ${{ secrets.CLIENT_SECRET }}
+          PROJECT_ID:              ${{ secrets.PROJECT_ID }}
+          COMMIT_ID:               ${{ env.COMMIT_ID }}
+          USERNAME:                ${{ env.USERNAME }}
+          USER_EMAIL:              ${{ env.USER_EMAIL }}
+          PR_NUMBER:               ${{ env.PR_NUMBER }}
         run: python scripts/create_artifact.py
