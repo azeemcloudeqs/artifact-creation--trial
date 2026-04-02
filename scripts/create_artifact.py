@@ -2,10 +2,9 @@ import os
 import requests
 
 # ===== CONFIG (FROM GITHUB SECRETS) =====
-CLIENT_ID = os.getenv("MATILLION_CLIENT_ID")
-CLIENT_SECRET = os.getenv("MATILLION_CLIENT_SECRET")
-
-PROJECT_ID = "4c84dfc3-59f9-46cb-ab74-140dc213f2e2"
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+PROJECT_ID = os.getenv("PROJECT_ID")
 ENVIRONMENT_NAME = "dev"
 BRANCH = "dev"
 
