@@ -48,6 +48,5 @@ jobs:
           GITHUB_SHA: ${{ env.GITHUB_SHA }}
           USERNAME: ${{ env.USERNAME }}
           USER_EMAIL: ${{ env.USER_EMAIL }}
-          MATILLION_CLIENT_ID: ${{ secrets.MATILLION_CLIENT_ID }}
-          MATILLION_CLIENT_SECRET: ${{ secrets.MATILLION_CLIENT_SECRET }}
+
         run: python scripts/create_artifact.py
