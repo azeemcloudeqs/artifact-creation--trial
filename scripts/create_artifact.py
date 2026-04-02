@@ -1,20 +1,26 @@
 import os
 import requests
 
-# ===== CONFIG =====
-CLIENT_ID = "2ea22e3a-29a7-486c-bf0b-5d94aca51ac0"
-CLIENT_SECRET = "XALRXYRfCPsz9bSmcJwppAPNLSdAbSOc"
+# ===== CONFIG (FROM GITHUB SECRETS) =====
+CLIENT_ID = os.getenv("MATILLION_CLIENT_ID")
+CLIENT_SECRET = os.getenv("MATILLION_CLIENT_SECRET")
+
 PROJECT_ID = "4c84dfc3-59f9-46cb-ab74-140dc213f2e2"
 ENVIRONMENT_NAME = "dev"
 BRANCH = "dev"
 
 # ===== METADATA =====
 commit_id = os.getenv("GITHUB_SHA", "local_commit")
+username = os.getenv("USERNAME", "unknown_user")
+user_email = os.getenv("USER_EMAIL", "unknown_email")
+
 version_name = f"v_{commit_id[:7]}"
 
-print(" Creating Artifact:", version_name)
+print("🚀 Creating Artifact:", version_name)
+print("👤 User:", username)
+print("📧 Email:", user_email)
 
-# ===== TOKEN =====
+# ===== STEP 1: GET TOKEN =====
 token_url = "https://id.core.matillion.com/oauth/dpc/token"
 
 token_res = requests.post(
@@ -28,40 +34,41 @@ token_res = requests.post(
 )
 
 if token_res.status_code != 200:
-    raise Exception(" Token Error: " + token_res.text)
+    raise Exception("❌ Token Error: " + token_res.text)
 
-access_token = token_res.json()["access_token"]
-print(" Token Generated")
+access_token = token_res.json().get("access_token")
+print("✅ Token Generated")
 
-# ===== CREATE ARTIFACT =====
-
+# ===== STEP 2: CREATE ARTIFACT =====
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
 headers = {
     "Authorization": f"Bearer {access_token}",
     "environmentName": ENVIRONMENT_NAME,
     "branch": BRANCH,
-    "versionName": version_name,
-    "Content-Type": "application/json"
+    "versionName": version_name
 }
 
-# JSON body (IMPORTANT)
-payload = {
-    "versionName": version_name,
-    "ignoredResources": []
-}
-
+# 🚨 IMPORTANT: NO BODY, NO JSON, NO FILES
 response = requests.post(
     artifact_url,
-    headers=headers,
-    json=payload   # ✅ THIS IS THE FIX
+    headers=headers
 )
 
-# ===== RESPONSE =====
+# ===== STEP 3: HANDLE RESPONSE =====
 print("Status Code:", response.status_code)
 print("Response:", response.text)
 
 if response.status_code not in [200, 201]:
-    raise Exception(" Artifact creation failed")
+    raise Exception("❌ Artifact creation failed")
 
-print(" Artifact Created Successfully:", version_name)
+# Optional: parse response
+try:
+    data = response.json()
+    print("📦 Artifact ID:", data.get("id"))
+    print("🏷 Version:", data.get("versionName"))
+    print("🕒 Created At:", data.get("createdAt"))
+except:
+    print("ℹ️ No JSON response body")
+
+print("✅ Artifact Created Successfully:", version_name)
