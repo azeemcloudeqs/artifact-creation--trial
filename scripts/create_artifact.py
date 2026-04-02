@@ -46,15 +46,9 @@ headers = {
 }
 
 # JSON body (IMPORTANT)
-payload = {
-    "versionName": version_name,
-    "ignoredResources": []
-}
-
 response = requests.post(
     artifact_url,
-    headers=headers,
-    json=payload   # ✅ THIS IS THE FIX
+    headers=headers
 )
 
 # ===== RESPONSE =====
