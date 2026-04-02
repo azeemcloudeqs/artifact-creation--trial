@@ -1,21 +1,20 @@
 import os
-import json
 import requests
 
-# ===== CONFIG (FROM GITHUB SECRETS / ENV) =====
+# ===== CONFIG (FROM GITHUB SECRETS) =====
+# Secret names must match exactly what you set in GitHub → Settings → Secrets
 CLIENT_ID     = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 PROJECT_ID    = os.getenv("PROJECT_ID")
 
 ENVIRONMENT_NAME = "dev"
 BRANCH           = "dev"
-MATILLION_FOLDER = "matillion"          # folder in your repo
 
 # ===== METADATA =====
-commit_id  = os.getenv("COMMIT_ID", "local_commit")
-username   = os.getenv("USERNAME",  "unknown_user")
-user_email = os.getenv("USER_EMAIL","unknown_email")
-pr_number  = os.getenv("PR_NUMBER", "unknown_pr")
+commit_id  = os.getenv("COMMIT_ID",  "local_commit")
+username   = os.getenv("USERNAME",   "unknown_user")
+user_email = os.getenv("USER_EMAIL", "unknown_email")
+pr_number  = os.getenv("PR_NUMBER",  "unknown_pr")
 
 version_name = f"v_{commit_id[:7]}"
 
@@ -29,9 +28,9 @@ print("===================================")
 
 # ===== VALIDATION =====
 missing = [k for k, v in {
-    "CLIENT_ID": CLIENT_ID,
+    "CLIENT_ID":     CLIENT_ID,
     "CLIENT_SECRET": CLIENT_SECRET,
-    "PROJECT_ID":PROJECT_ID,
+    "PROJECT_ID":    PROJECT_ID,
 }.items() if not v]
 
 if missing:
@@ -57,73 +56,31 @@ if token_res.status_code != 200:
 access_token = token_res.json().get("access_token")
 print("✅ Token generated")
 
-# ===== STEP 2: COLLECT MATILLION FILES =====
-# Reads every file inside the matillion/ folder and sends them in the payload.
-# Matillion DPC expects files as a list of { "path": "...", "content": "..." } objects.
-print(f"\n📁 Scanning '{MATILLION_FOLDER}/' for orchestration & transformation files...")
-
-files_payload = []
-supported_extensions = {".orch.yaml", ".tran.yaml", ".yaml", ".yml", ".json", ".sql"}
-
-if not os.path.isdir(MATILLION_FOLDER):
-    raise FileNotFoundError(
-        f"❌ Folder '{MATILLION_FOLDER}' not found. "
-        "Make sure your workflow checks out the repo and the folder exists."
-    )
-
-for root, dirs, files in os.walk(MATILLION_FOLDER):
-    # Skip hidden dirs (e.g. .git inside submodules)
-    dirs[:] = [d for d in dirs if not d.startswith(".")]
-    for filename in sorted(files):
-        if any(filename.endswith(ext) for ext in supported_extensions) or "." not in filename:
-            filepath = os.path.join(root, filename)
-            rel_path = os.path.relpath(filepath, start=".")   # keep full relative path
-            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
-                content = fh.read()
-            files_payload.append({"path": rel_path, "content": content})
-            print(f"   + {rel_path}")
-
-if not files_payload:
-    print("⚠️  No supported files found in the matillion folder — artifact will be empty.")
-
-print(f"\n📦 Total files to include: {len(files_payload)}")
-
-# ===== STEP 3: CREATE ARTIFACT =====
-artifact_url = (
-    f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
-)
+# ===== STEP 2: CREATE ARTIFACT =====
+# Matillion DPC snapshots the branch that is already synced inside its
+# Git-backed project. No body or file upload is needed — just pass
+# versionName, environmentName, and branch as HEADERS.
+# DO NOT set Content-Type: application/json — the API returns 415 if you do.
+artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
 headers = {
-    "Authorization": f"Bearer {access_token}",
-    "Content-Type":  "application/json",
+    "Authorization":   f"Bearer {access_token}",
     "environmentName": ENVIRONMENT_NAME,
     "branch":          BRANCH,
     "versionName":     version_name,
-}
-
-# Build a structured body that carries metadata + files
-body = {
-    "versionName":   version_name,
-    "environmentName": ENVIRONMENT_NAME,
-    "branch":        BRANCH,
-    "metadata": {
-        "commitId":  commit_id,
-        "username":  username,
-        "userEmail": user_email,
-        "prNumber":  pr_number,
-    },
-    "files": files_payload,
+    # ❌ No Content-Type header — sending one causes 415 Unsupported Media Type
 }
 
 print(f"\n🚀 Creating artifact '{version_name}' ...")
+
 response = requests.post(
     artifact_url,
     headers=headers,
-    json=body,          # <-- was missing entirely in the original script
+    # ❌ No json= or data= body — the API does not accept a body
     timeout=60,
 )
 
-# ===== STEP 4: HANDLE RESPONSE =====
+# ===== STEP 3: HANDLE RESPONSE =====
 print(f"\nStatus Code : {response.status_code}")
 print(f"Response    : {response.text}")
 
