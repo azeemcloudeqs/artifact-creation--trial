@@ -57,7 +57,6 @@ access_token = token_res.json().get("access_token")
 print("✅ Token generated")
 
 # ===== STEP 2: COLLECT FILES FROM matillion/ FOLDER =====
-# Walk the matillion/ folder and collect all orchestration & transformation files.
 print(f"\n📁 Scanning '{MATILLION_FOLDER}/' ...")
 
 if not os.path.isdir(MATILLION_FOLDER):
@@ -86,10 +85,6 @@ if not collected_files:
 print(f"\n📦 Total files found: {len(collected_files)}")
 
 # ===== STEP 3: CREATE ARTIFACT WITH FILES =====
-# Postman shows the API uses multipart/form-data with a 'file' field.
-# We open all collected files and attach them all under the 'file' key.
-# requests handles the multipart boundary and Content-Type automatically
-# when you pass the `files=` argument — do NOT set Content-Type manually.
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
 headers = {
@@ -97,18 +92,22 @@ headers = {
     "environmentName": ENVIRONMENT_NAME,
     "branch":          BRANCH,
     "versionName":     version_name,
-    # ⚠️  Do NOT set Content-Type here — requests sets it automatically
-    # with the correct multipart boundary when files= is used.
+    # ⚠️ Do NOT set Content-Type — requests sets multipart/form-data
+    # with the correct boundary automatically when files= is used.
 }
 
-# Build multipart file list — multiple files all under the key "file"
+# The API error "Names must be unique within the set of assets" means
+# each file must be sent as a SEPARATE multipart part with a unique filename.
+# We use the full filename (e.g. "ORCH_SCD_TYPE_2.orch.yaml") as the
+# unique name for each part — all still under the field key "file".
 file_handles = []
 multipart_files = []
 for filepath in collected_files:
     fh = open(filepath, "rb")
     file_handles.append(fh)
-    filename = os.path.basename(filepath)
+    filename = os.path.basename(filepath)   # e.g. ORCH_SCD_TYPE_2.orch.yaml
     multipart_files.append(("file", (filename, fh, "application/octet-stream")))
+    print(f"   Attaching: {filename}")
 
 print(f"\n🚀 Creating artifact '{version_name}' ...")
 
