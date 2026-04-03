@@ -1,5 +1,7 @@
 import os
+import zipfile
 import requests
+import tempfile
 
 # ===== CONFIG (FROM GITHUB SECRETS) =====
 CLIENT_ID     = os.getenv("CLIENT_ID")
@@ -56,35 +58,43 @@ if token_res.status_code != 200:
 access_token = token_res.json().get("access_token")
 print("✅ Token generated")
 
-# ===== STEP 2: COLLECT FILES FROM matillion/ FOLDER =====
-print(f"\n📁 Scanning '{MATILLION_FOLDER}/' ...")
-
+# ===== STEP 2: SCAN FILES FIRST — DISPLAY BEFORE ZIPPING =====
 if not os.path.isdir(MATILLION_FOLDER):
     raise FileNotFoundError(
-        f"❌ Folder '{MATILLION_FOLDER}' not found in workspace. "
+        f"❌ Folder '{MATILLION_FOLDER}' not found. "
         "Ensure the repo is checked out and the folder exists on this branch."
     )
 
-supported_extensions = (".orch.yaml", ".tran.yaml", ".yaml", ".yml", ".json", ".sql")
-collected_files = []
-
+# Collect all file paths first
+all_files = []
 for root, dirs, files in os.walk(MATILLION_FOLDER):
     dirs[:] = [d for d in dirs if not d.startswith(".")]
     for filename in sorted(files):
-        if filename.endswith(supported_extensions):
-            filepath = os.path.join(root, filename)
-            collected_files.append(filepath)
-            print(f"   + {filepath}")
+        filepath = os.path.join(root, filename)
+        all_files.append(os.path.relpath(filepath, start="."))
 
-if not collected_files:
-    raise FileNotFoundError(
-        f"❌ No supported files found in '{MATILLION_FOLDER}/'. "
-        "Expected .orch.yaml, .tran.yaml, .yaml, .yml, .json, or .sql files."
-    )
+if not all_files:
+    raise FileNotFoundError(f"❌ No files found in '{MATILLION_FOLDER}/'.")
 
-print(f"\n📦 Total files found: {len(collected_files)}")
+# Display all file paths that will go into the artifact
+print(f"\n📂 Files in '{MATILLION_FOLDER}/' to be included in artifact ({len(all_files)} files):")
+print("-----------------------------------")
+for path in all_files:
+    print(f"   {path}")
+print("-----------------------------------")
 
-# ===== STEP 3: CREATE ARTIFACT WITH FILES =====
+# ===== STEP 3: ZIP THE ENTIRE matillion/ FOLDER =====
+zip_path = tempfile.mktemp(suffix=".zip")
+print(f"\n📦 Zipping folder ...")
+
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    for path in all_files:
+        zf.write(path, path)
+
+zip_size_kb = os.path.getsize(zip_path) / 1024
+print(f"✅ Zip ready ({zip_size_kb:.1f} KB)")
+
+# ===== STEP 4: POST ZIP AS ARTIFACT =====
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
 headers = {
@@ -92,37 +102,22 @@ headers = {
     "environmentName": ENVIRONMENT_NAME,
     "branch":          BRANCH,
     "versionName":     version_name,
-    # ⚠️ Do NOT set Content-Type — requests sets multipart/form-data
-    # with the correct boundary automatically when files= is used.
 }
 
-# The API error "Names must be unique within the set of assets" means
-# each file must be sent as a SEPARATE multipart part with a unique filename.
-# We use the full filename (e.g. "ORCH_SCD_TYPE_2.orch.yaml") as the
-# unique name for each part — all still under the field key "file".
-file_handles = []
-multipart_files = []
-for filepath in collected_files:
-    fh = open(filepath, "rb")
-    file_handles.append(fh)
-    filename = os.path.basename(filepath)   # e.g. ORCH_SCD_TYPE_2.orch.yaml
-    multipart_files.append(("file", (filename, fh, "application/octet-stream")))
-    print(f"   Attaching: {filename}")
-
+zip_filename = f"{version_name}.zip"
 print(f"\n🚀 Creating artifact '{version_name}' ...")
 
-try:
+with open(zip_path, "rb") as zf:
     response = requests.post(
         artifact_url,
         headers=headers,
-        files=multipart_files,
-        timeout=60,
+        files=[("file", (zip_filename, zf, "application/zip"))],
+        timeout=120,
     )
-finally:
-    for fh in file_handles:
-        fh.close()
 
-# ===== STEP 4: HANDLE RESPONSE =====
+os.remove(zip_path)
+
+# ===== STEP 5: HANDLE RESPONSE =====
 print(f"\nStatus Code : {response.status_code}")
 print(f"Response    : {response.text}")
 
