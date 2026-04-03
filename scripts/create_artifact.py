@@ -137,4 +137,4 @@ try:
 except (ValueError, KeyError):
     print("ℹ️  No JSON body in response")
 
-print(f"\n✅ Artifact created successfully: {version_name}")
+print(f"\n✅ Artifact created successfully__: {version_name}")
