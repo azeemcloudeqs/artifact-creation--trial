@@ -1,7 +1,5 @@
 import os
-import zipfile
 import requests
-import tempfile
 
 # ===== CONFIG (FROM GITHUB SECRETS) =====
 CLIENT_ID     = os.getenv("CLIENT_ID")
@@ -58,43 +56,46 @@ if token_res.status_code != 200:
 access_token = token_res.json().get("access_token")
 print("✅ Token generated")
 
-# ===== STEP 2: SCAN FILES FIRST — DISPLAY BEFORE ZIPPING =====
+# ===== STEP 2: SCAN FILES =====
 if not os.path.isdir(MATILLION_FOLDER):
     raise FileNotFoundError(
         f"❌ Folder '{MATILLION_FOLDER}' not found. "
         "Ensure the repo is checked out and the folder exists on this branch."
     )
 
-# Collect all file paths first
-all_files = []
+# Collect files as:
+#   disk_path  = matillion/orchestrations/ORCH_SCD_TYPE_2.orch.yaml  (to open)
+#   field_key  = orchestrations/ORCH_SCD_TYPE_2.orch.yaml            (form field name sent to API)
+#
+# Matillion DPC expects paths relative to the PROJECT root, not including
+# the top-level 'matillion/' folder. Stripping it makes the paths match
+# Matillion's internal project structure so the artifact recognises the files.
+
+file_entries = []   # list of (disk_path, field_key)
+
 for root, dirs, files in os.walk(MATILLION_FOLDER):
     dirs[:] = [d for d in dirs if not d.startswith(".")]
     for filename in sorted(files):
-        filepath = os.path.join(root, filename)
-        all_files.append(os.path.relpath(filepath, start="."))
+        disk_path = os.path.join(root, filename)
+        # Strip the leading 'matillion/' prefix for the API field key
+        field_key = os.path.relpath(disk_path, start=MATILLION_FOLDER)
+        file_entries.append((disk_path, field_key))
 
-if not all_files:
+if not file_entries:
     raise FileNotFoundError(f"❌ No files found in '{MATILLION_FOLDER}/'.")
 
-# Display all file paths that will go into the artifact
-print(f"\n📂 Files in '{MATILLION_FOLDER}/' to be included in artifact ({len(all_files)} files):")
+print(f"\n📂 Files to be included in artifact ({len(file_entries)} files):")
 print("-----------------------------------")
-for path in all_files:
-    print(f"   {path}")
+for disk_path, field_key in file_entries:
+    print(f"   {field_key}  ←  {disk_path}")
 print("-----------------------------------")
 
-# ===== STEP 3: ZIP THE ENTIRE matillion/ FOLDER =====
-zip_path = tempfile.mktemp(suffix=".zip")
-print(f"\n📦 Zipping folder ...")
-
-with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-    for path in all_files:
-        zf.write(path, path)
-
-zip_size_kb = os.path.getsize(zip_path) / 1024
-print(f"✅ Zip ready ({zip_size_kb:.1f} KB)")
-
-# ===== STEP 4: POST ZIP AS ARTIFACT =====
+# ===== STEP 3: POST FILES AS ARTIFACT =====
+# Per Matillion DPC docs:
+# - multipart/form-data request
+# - Each file's FORM FIELD NAME = its path relative to the Matillion project root
+#   e.g. 'orchestrations/ORCH_SCD_TYPE_2.orch.yaml'
+# - Additional headers: versionName, environmentName, branch, commitHash
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
 headers = {
@@ -102,39 +103,83 @@ headers = {
     "environmentName": ENVIRONMENT_NAME,
     "branch":          BRANCH,
     "versionName":     version_name,
+    "commitHash":      commit_id,   # full commit SHA as documented
 }
 
-zip_filename = f"{version_name}.zip"
+file_handles = []
+multipart_files = []
+for disk_path, field_key in file_entries:
+    fh = open(disk_path, "rb")
+    file_handles.append(fh)
+    filename = os.path.basename(disk_path)
+    multipart_files.append(
+        (field_key, (filename, fh, "application/octet-stream"))
+    )
+
 print(f"\n🚀 Creating artifact '{version_name}' ...")
 
-with open(zip_path, "rb") as zf:
+try:
     response = requests.post(
         artifact_url,
         headers=headers,
-        files=[("file", (zip_filename, zf, "application/zip"))],
+        files=multipart_files,
         timeout=120,
     )
+finally:
+    for fh in file_handles:
+        fh.close()
 
-os.remove(zip_path)
-
-# ===== STEP 5: HANDLE RESPONSE =====
 print(f"\nStatus Code : {response.status_code}")
 print(f"Response    : {response.text}")
 
-if response.status_code not in (200, 201):
-    raise Exception(
-        f"❌ Artifact creation failed ({response.status_code}): {response.text}"
+# ===== STEP 4: HANDLE RESPONSE (500 = known Matillion false negative) =====
+artifact_id = None
+
+if response.status_code in (200, 201):
+    try:
+        data = response.json()
+        artifact_id = data.get("id")
+        print("\n========== ARTIFACT CREATED ==========")
+        print(f"  Artifact ID  : {artifact_id}")
+        print(f"  Version Name : {data.get('versionName', 'N/A')}")
+        print(f"  Created At   : {data.get('createdAt',   'N/A')}")
+        print(f"  Status       : {data.get('status',      'N/A')}")
+        print("======================================")
+    except (ValueError, KeyError):
+        print("ℹ️  No JSON body in response")
+
+elif response.status_code == 500:
+    print(f"\n⚠️  Got 500 — verifying if artifact was actually created ...")
+    verify_res = requests.get(
+        artifact_url,
+        headers={
+            "Authorization":   f"Bearer {access_token}",
+            "environmentName": ENVIRONMENT_NAME,
+        },
+        timeout=30,
     )
+    if verify_res.status_code == 200:
+        try:
+            items = verify_res.json()
+            items = items if isinstance(items, list) else items.get("content", [])
+            match = next((a for a in items if a.get("versionName") == version_name), None)
+            if match:
+                artifact_id = match.get("id")
+                print("\n========== ARTIFACT CONFIRMED ==========")
+                print(f"  Artifact ID  : {artifact_id}")
+                print(f"  Version Name : {match.get('versionName', 'N/A')}")
+                print(f"  Created At   : {match.get('createdAt',   'N/A')}")
+                print(f"  Status       : {match.get('status',      'N/A')}")
+                print("========================================")
+            else:
+                raise Exception(f"❌ Artifact '{version_name}' not found after 500.")
+        except (ValueError, KeyError) as e:
+            raise Exception(f"❌ Could not parse verification response: {e}")
+    else:
+        raise Exception(
+            f"❌ Creation failed (500) and verification also failed ({verify_res.status_code})"
+        )
+else:
+    raise Exception(f"❌ Artifact creation failed ({response.status_code}): {response.text}")
 
-try:
-    data = response.json()
-    print("\n========== ARTIFACT DETAILS ==========")
-    print(f"  Artifact ID  : {data.get('id',          'N/A')}")
-    print(f"  Version Name : {data.get('versionName', 'N/A')}")
-    print(f"  Created At   : {data.get('createdAt',   'N/A')}")
-    print(f"  Status       : {data.get('status',      'N/A')}")
-    print("======================================")
-except (ValueError, KeyError):
-    print("ℹ️  No JSON body in response")
-
-print(f"\n✅ Artifact created successfully__: {version_name}")
+print(f"\n✅ Artifact created successfully: {version_name}")
