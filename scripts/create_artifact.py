@@ -8,6 +8,7 @@ PROJECT_ID    = os.getenv("PROJECT_ID")
 
 ENVIRONMENT_NAME = "dev"
 BRANCH           = "dev"
+MATILLION_FOLDER = "matillion"
 
 # ===== METADATA =====
 commit_id  = os.getenv("COMMIT_ID",  "local_commit")
@@ -55,30 +56,74 @@ if token_res.status_code != 200:
 access_token = token_res.json().get("access_token")
 print("✅ Token generated")
 
-# ===== STEP 2: CREATE ARTIFACT =====
+# ===== STEP 2: COLLECT FILES FROM matillion/ FOLDER =====
+# Walk the matillion/ folder and collect all orchestration & transformation files.
+print(f"\n📁 Scanning '{MATILLION_FOLDER}/' ...")
+
+if not os.path.isdir(MATILLION_FOLDER):
+    raise FileNotFoundError(
+        f"❌ Folder '{MATILLION_FOLDER}' not found in workspace. "
+        "Ensure the repo is checked out and the folder exists on this branch."
+    )
+
+supported_extensions = (".orch.yaml", ".tran.yaml", ".yaml", ".yml", ".json", ".sql")
+collected_files = []
+
+for root, dirs, files in os.walk(MATILLION_FOLDER):
+    dirs[:] = [d for d in dirs if not d.startswith(".")]
+    for filename in sorted(files):
+        if filename.endswith(supported_extensions):
+            filepath = os.path.join(root, filename)
+            collected_files.append(filepath)
+            print(f"   + {filepath}")
+
+if not collected_files:
+    raise FileNotFoundError(
+        f"❌ No supported files found in '{MATILLION_FOLDER}/'. "
+        "Expected .orch.yaml, .tran.yaml, .yaml, .yml, .json, or .sql files."
+    )
+
+print(f"\n📦 Total files found: {len(collected_files)}")
+
+# ===== STEP 3: CREATE ARTIFACT WITH FILES =====
+# Postman shows the API uses multipart/form-data with a 'file' field.
+# We open all collected files and attach them all under the 'file' key.
+# requests handles the multipart boundary and Content-Type automatically
+# when you pass the `files=` argument — do NOT set Content-Type manually.
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
-# Content-Type is set manually (not via json=) so we control the body separately.
-# The API requires the header to be present but does not accept a body payload —
-# so we send Content-Type: application/json with an empty byte string as the body.
 headers = {
     "Authorization":   f"Bearer {access_token}",
-    "Content-Type":    "application/json",
     "environmentName": ENVIRONMENT_NAME,
     "branch":          BRANCH,
     "versionName":     version_name,
+    # ⚠️  Do NOT set Content-Type here — requests sets it automatically
+    # with the correct multipart boundary when files= is used.
 }
+
+# Build multipart file list — multiple files all under the key "file"
+file_handles = []
+multipart_files = []
+for filepath in collected_files:
+    fh = open(filepath, "rb")
+    file_handles.append(fh)
+    filename = os.path.basename(filepath)
+    multipart_files.append(("file", (filename, fh, "application/octet-stream")))
 
 print(f"\n🚀 Creating artifact '{version_name}' ...")
 
-response = requests.post(
-    artifact_url,
-    headers=headers,
-    data=b"",        # empty body — avoids requests auto-setting any Content-Type
-    timeout=60,
-)
+try:
+    response = requests.post(
+        artifact_url,
+        headers=headers,
+        files=multipart_files,
+        timeout=60,
+    )
+finally:
+    for fh in file_handles:
+        fh.close()
 
-# ===== STEP 3: HANDLE RESPONSE =====
+# ===== STEP 4: HANDLE RESPONSE =====
 print(f"\nStatus Code : {response.status_code}")
 print(f"Response    : {response.text}")
 
