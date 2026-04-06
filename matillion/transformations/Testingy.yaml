@@ -10,7 +10,7 @@ pipeline:
         schema: "BRONZE"
         targetTable: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
         columnNames:
-        - "C_ID"
+        - "Azeem"
         - "NAME"
         - "EMAIL"
         - "CITY"
