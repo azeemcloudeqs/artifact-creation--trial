@@ -102,12 +102,12 @@ design:
     End Success:
       position:
         x: 470
-        "y": -100
+        "y": -90
       tempMetlId: 4
     End Failure:
       position:
         x: 480
-        "y": 20
+        "y": 25
       tempMetlId: 5
     TJ_LOAD_SILVER:
       position:
