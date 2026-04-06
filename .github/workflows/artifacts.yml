@@ -3,9 +3,11 @@ name: Matillion Artifact Pipeline
 on:
   pull_request:
     branches:
-      - dev
-    paths:
-      - 'matillion/**'
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 jobs:
   create-artifact:
@@ -20,10 +22,9 @@ jobs:
 
       # 2. Extract Metadata
       - name: Extract Metadata
-        id: meta
         run: |
-          echo "COMMIT_ID=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
-          echo "USERNAME=${{ github.actor }}"                         >> $GITHUB_ENV
+          echo "COMMIT_ID=${{ github.event.pull_request.head.sha }}"  >> $GITHUB_ENV
+          echo "USERNAME=${{ github.actor }}"                          >> $GITHUB_ENV
           echo "USER_EMAIL=$(git log -1 --pretty=format:'%ae' ${{ github.event.pull_request.head.sha }})" >> $GITHUB_ENV
           echo "PR_NUMBER=${{ github.event.pull_request.number }}"    >> $GITHUB_ENV
 
@@ -52,11 +53,11 @@ jobs:
       # 6. Run Python Script
       - name: Create Matillion Artifact
         env:
-          CLIENT_ID:               ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET:           ${{ secrets.CLIENT_SECRET }}
-          PROJECT_ID:              ${{ secrets.PROJECT_ID }}
-          COMMIT_ID:               ${{ env.COMMIT_ID }}
-          USERNAME:                ${{ env.USERNAME }}
-          USER_EMAIL:              ${{ env.USER_EMAIL }}
-          PR_NUMBER:               ${{ env.PR_NUMBER }}
+          CLIENT_ID:     ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          PROJECT_ID:    ${{ secrets.PROJECT_ID }}
+          COMMIT_ID:     ${{ env.COMMIT_ID }}
+          USERNAME:      ${{ env.USERNAME }}
+          USER_EMAIL:    ${{ env.USER_EMAIL }}
+          PR_NUMBER:     ${{ env.PR_NUMBER }}
         run: python scripts/create_artifact.py
