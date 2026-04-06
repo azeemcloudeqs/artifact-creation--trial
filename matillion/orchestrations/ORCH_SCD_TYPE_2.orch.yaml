@@ -80,7 +80,7 @@ pipeline:
         success:
         - "SQL Script"
       parameters:
-        componentName: "TJ_LOAD_SILVER"
+        componentName: "TJ_LOAD_SILVER_23"
         transformationJob: "Azeem_TRAIL/SCD_type_2_SQL_SCRIPT/TJ_LOAD_SILVER.tran.yaml"
         setScalarVariables:
         setGridVariables:
