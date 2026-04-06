@@ -14,50 +14,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout with full history so git log works
+      # ── 1. Checkout full history ────────────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Extract Metadata
-      - name: Extract Metadata
-        run: |
-          echo "COMMIT_ID=${{ github.event.pull_request.head.sha }}"  >> $GITHUB_ENV
-          echo "USERNAME=${{ github.actor }}"                          >> $GITHUB_ENV
-          echo "USER_EMAIL=$(git log -1 --pretty=format:'%ae' ${{ github.event.pull_request.head.sha }})" >> $GITHUB_ENV
-          echo "PR_NUMBER=${{ github.event.pull_request.number }}"    >> $GITHUB_ENV
-
-      # 3. Print Debug Info
+      # ── 2. Print metadata directly ─────────────────────────────────────────
       - name: Print Metadata
         run: |
           echo "==================================="
-          echo "  Commit ID : $COMMIT_ID"
-          echo "  User      : $USERNAME"
-          echo "  Email     : $USER_EMAIL"
-          echo "  PR Number : $PR_NUMBER"
+          echo "  Commit ID : ${{ github.event.pull_request.head.sha }}"
+          echo "  User      : ${{ github.actor }}"
+          echo "  Email     : $(git log -1 --pretty=format:'%ae' ${{ github.event.pull_request.head.sha }})"
+          echo "  PR Number : ${{ github.event.pull_request.number }}"
           echo "==================================="
 
-      # 4. Setup Python
+      # ── 3. Detect changed orchestration & transformation files ──────────────
+    
+      - name: Get Changed Pipeline Files
+        run: |
+          echo "=== Changed Pipeline Files in this PR ==="
+
+          git diff --name-only \
+            ${{ github.event.pull_request.base.sha }} \
+            ${{ github.event.pull_request.head.sha }} \
+            | grep -E '\.(orch|tran)\.yaml$' > changed_pipelines.txt || true
+
+          if [ -s changed_pipelines.txt ]; then
+            echo "Changed files:"
+            cat changed_pipelines.txt
+          else
+            echo "No orchestration or transformation files changed."
+          fi
+          echo "========================================="
+
+      # ── 4. Setup Python ────────────────────────────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 5. Install Dependencies
+      # ── 5. Install dependencies ────────────────────────────────────────────
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests pyyaml
 
-      # 6. Run Python Script
+      # ── 6. Create Artifact ─────────────────────────────────────────────────
       - name: Create Matillion Artifact
-        env:
-          CLIENT_ID:     ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          PROJECT_ID:    ${{ secrets.PROJECT_ID }}
-          COMMIT_ID:     ${{ env.COMMIT_ID }}
-          USERNAME:      ${{ env.USERNAME }}
-          USER_EMAIL:    ${{ env.USER_EMAIL }}
-          PR_NUMBER:     ${{ env.PR_NUMBER }}
-        run: python scripts/create_artifact.py
+        run: |
+          python scripts/create_artifact.py \
+            "${{ secrets.CLIENT_ID }}" \
+            "${{ secrets.CLIENT_SECRET }}" \
+            "${{ secrets.PROJECT_ID }}" \
+            "dev" \
+            "${{ github.event.pull_request.head.sha }}"
