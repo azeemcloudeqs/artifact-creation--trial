@@ -5,7 +5,7 @@ pipeline:
     SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG:
       type: "table-input-1"
       parameters:
-        componentName: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
+        componentName: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG_12"
         database: "TEST_AZEEM"
         schema: "BRONZE"
         targetTable: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
