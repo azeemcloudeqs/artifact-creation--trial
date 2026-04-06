@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout full history ────────────────────────────────────────────
+      # Checkout full history 
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ── 2. Print metadata directly ─────────────────────────────────────────
+      # Print metadata 
       - name: Print Metadata
         run: |
           echo "==================================="
@@ -30,7 +30,7 @@ jobs:
           echo "  PR Number : ${{ github.event.pull_request.number }}"
           echo "==================================="
 
-      # ── 3. Detect changed orchestration & transformation files ──────────────
+      # Detect changed orchestration & transformation files
     
       - name: Get Changed Pipeline Files
         run: |
@@ -49,19 +49,19 @@ jobs:
           fi
           echo "========================================="
 
-      # ── 4. Setup Python ────────────────────────────────────────────────────
+      # Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ── 5. Install dependencies ────────────────────────────────────────────
+      # Install dependencies 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests pyyaml
 
-      # ── 6. Create Artifact ─────────────────────────────────────────────────
+      # Create Artifact 
       - name: Create Matillion Artifact
         run: |
           python scripts/create_artifact.py \
