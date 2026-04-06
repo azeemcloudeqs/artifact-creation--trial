@@ -6,8 +6,8 @@ CLIENT_ID     = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 PROJECT_ID    = os.getenv("PROJECT_ID")
 
-ENVIRONMENT_NAME = "dev"
-BRANCH           = "dev"
+ENVIRONMENT_NAME = "default"
+BRANCH           = "main"
 MATILLION_FOLDER = "matillion"
 
 # ===== METADATA =====
@@ -67,9 +67,7 @@ if not os.path.isdir(MATILLION_FOLDER):
 #   disk_path  = matillion/orchestrations/ORCH_SCD_TYPE_2.orch.yaml  (to open)
 #   field_key  = orchestrations/ORCH_SCD_TYPE_2.orch.yaml            (form field name sent to API)
 #
-# Matillion DPC expects paths relative to the PROJECT root, not including
-# the top-level 'matillion/' folder. Stripping it makes the paths match
-# Matillion's internal project structure so the artifact recognises the files.
+
 
 file_entries = []   # list of (disk_path, field_key)
 
@@ -92,10 +90,7 @@ print("-----------------------------------")
 
 # ===== STEP 3: POST FILES AS ARTIFACT =====
 # Per Matillion DPC docs:
-# - multipart/form-data request
-# - Each file's FORM FIELD NAME = its path relative to the Matillion project root
-#   e.g. 'orchestrations/ORCH_SCD_TYPE_2.orch.yaml'
-# - Additional headers: versionName, environmentName, branch, commitHash
+
 artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
 
 headers = {
