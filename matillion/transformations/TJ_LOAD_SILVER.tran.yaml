@@ -6,8 +6,8 @@ pipeline:
       type: "table-input-2"
       parameters:
         componentName: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG_12"
-        database: "TEST_AZEEM"
-        schema: "BRONZE"
+        database: "TEST_AZEEM_11"
+        schema: "BRONZE__trail 15"
         targetTable: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
         columnNames:
         - "C_ID"
